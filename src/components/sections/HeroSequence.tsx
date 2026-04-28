@@ -157,16 +157,20 @@ export default function HeroSequence() {
       }
     };
 
-    // Parallel batches of 10 — balanced for mobile and desktop
+    // Only pre-load the first 30 frames to save memory on mobile.
+    // The rest will load on-demand as the user scrolls.
     const runBatches = async () => {
       const BATCH = 10;
-      for (let s = 0; s < TOTAL_FRAMES; s += BATCH) {
+      const PRELOAD_COUNT = Math.min(TOTAL_FRAMES, 30);
+      for (let s = 0; s < PRELOAD_COUNT; s += BATCH) {
         const batch: Promise<void>[] = [];
-        for (let i = s; i < Math.min(s + BATCH, TOTAL_FRAMES); i++) {
+        for (let i = s; i < Math.min(s + BATCH, PRELOAD_COUNT); i++) {
           batch.push(loadFrame(i));
         }
         await Promise.allSettled(batch);
       }
+      // Mark as complete even if we only pre-loaded a portion
+      onComplete();
     };
     runBatches();
 
@@ -175,9 +179,26 @@ export default function HeroSequence() {
       const p = rawProgressRef.current;
       const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
 
-      if (frameIdx !== prevFrameRef.current && bitmapsRef.current[frameIdx]) {
-        prevFrameRef.current = frameIdx;
-        drawBitmap(frameIdx);
+      if (frameIdx !== prevFrameRef.current) {
+        // If we have the bitmap, draw it
+        if (bitmapsRef.current[frameIdx]) {
+          prevFrameRef.current = frameIdx;
+          drawBitmap(frameIdx);
+        } else {
+          // If not loaded yet, try to load it on demand (for mobile/low memory)
+          loadFrame(frameIdx);
+        }
+
+        // ─── Memory Management: Sliding Window ──────────────────────────
+        // On mobile, keeping 100 bitmaps in RAM crashes the browser.
+        // We only keep the 15 frames around the current one.
+        const WINDOW = 15;
+        bitmapsRef.current.forEach((bmp, i) => {
+          if (bmp && (i < frameIdx - WINDOW || i > frameIdx + WINDOW)) {
+            bmp.close();
+            bitmapsRef.current[i] = undefined as any;
+          }
+        });
       }
 
       if (fillRef.current) fillRef.current.style.transform = `scaleY(${p})`;
