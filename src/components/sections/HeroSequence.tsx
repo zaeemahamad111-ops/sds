@@ -60,16 +60,18 @@ export default function HeroSequence() {
   const rawProgressRef = useRef(0);
 
   // ─── Sync with Lenis scroll ─────────────────────────────────────────────────
-  // useLenis callback fires in sync with Lenis's RAF loop — guaranteed correct position
-  useLenis(({ scroll }: { scroll: number }) => {
+  useLenis(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    const wrapTop = wrap.offsetTop;
-    const scrollable = wrap.offsetHeight - window.innerHeight;
-    rawProgressRef.current =
-      scrollable > 0
-        ? Math.min(1, Math.max(0, (scroll - wrapTop) / scrollable))
-        : 0;
+    
+    // Use getBoundingClientRect for more reliable position tracking in production
+    const rect = wrap.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const totalScrollable = wrap.offsetHeight - windowHeight;
+    
+    // Progress is based on how much of the wrapper has passed the top of the viewport
+    const progress = Math.min(1, Math.max(0, -rect.top / totalScrollable));
+    rawProgressRef.current = progress;
   });
 
   // ─── Canvas sizing ──────────────────────────────────────────────────────────
