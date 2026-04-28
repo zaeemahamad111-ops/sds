@@ -53,25 +53,21 @@ export default function HeroSequence() {
   const counterRef = useRef<HTMLSpanElement>(null);
 
   const bitmapsRef = useRef<ImageBitmap[]>([]);
+  const targetPRef = useRef(0);
+  const smoothPRef = useRef(0);
   const prevFrameRef = useRef(-1);
   const prevSceneRef = useRef(-1);
-
-  // Lenis scroll position drives everything — no extra smoothing needed
-  const rawProgressRef = useRef(0);
 
   // ─── Sync with Lenis scroll ─────────────────────────────────────────────────
   useLenis(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     
-    // Use getBoundingClientRect for more reliable position tracking in production
     const rect = wrap.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     const totalScrollable = wrap.offsetHeight - windowHeight;
     
-    // Progress is based on how much of the wrapper has passed the top of the viewport
-    const progress = Math.min(1, Math.max(0, -rect.top / totalScrollable));
-    rawProgressRef.current = progress;
+    targetPRef.current = Math.min(1, Math.max(0, -rect.top / totalScrollable));
   });
 
   // ─── Canvas sizing ──────────────────────────────────────────────────────────
@@ -80,24 +76,34 @@ export default function HeroSequence() {
     if (!canvas) return;
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const isMobile = window.innerWidth < 768;
+      const dpr = Math.min(isMobile ? 1.2 : 2, window.devicePixelRatio || 1);
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
       if (prevFrameRef.current >= 0) drawBitmap(prevFrameRef.current);
     };
 
-    function drawBitmap(idx: number) {
+    const drawBitmap = (idx: number) => {
       const bmp = bitmapsRef.current[idx];
       if (!canvas || !bmp) return;
       const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) return;
-      const { width: cw, height: ch } = canvas;
-      const scale = Math.max(cw / bmp.width, ch / bmp.height);
-      const sw = bmp.width * scale;
-      const sh = bmp.height * scale;
+      
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const bw = bmp.width;
+      const bh = bmp.height;
+      
+      const scale = Math.max(cw / bw, ch / bh);
+      const sw = bw * scale;
+      const sh = bh * scale;
+      
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "medium";
       ctx.drawImage(bmp, (cw - sw) / 2, (ch - sh) / 2, sw, sh);
-    }
+    };
 
     resize();
     window.addEventListener("resize", resize);
@@ -108,7 +114,6 @@ export default function HeroSequence() {
   useEffect(() => {
     let loaded = 0;
     let completed = false;
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
     const drawBitmap = (idx: number) => {
       const canvas = canvasRef.current;
@@ -120,7 +125,6 @@ export default function HeroSequence() {
       const scale = Math.max(cw / bmp.width, ch / bmp.height);
       const sw = bmp.width * scale;
       const sh = bmp.height * scale;
-      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(bmp, (cw - sw) / 2, (ch - sh) / 2, sw, sh);
     };
 
@@ -136,111 +140,109 @@ export default function HeroSequence() {
       drawBitmap(0);
     };
 
-    const failSafe = setTimeout(onComplete, 8000); 
+    const failSafe = setTimeout(onComplete, 10000); // 10s failsafe for mobile
 
     const loadFrame = async (i: number) => {
-      if (i < 0 || i >= TOTAL_FRAMES || bitmapsRef.current[i]) return;
       try {
         const res = await fetch(FRAME_PATH(i + 1));
         const blob = await res.blob();
-        bitmapsRef.current[i] = await createImageBitmap(blob);
-        if (i === 0 && prevFrameRef.current === -1) drawBitmap(0);
+        // createImageBitmap is off-main-thread and faster than standard <img> loading
+        const bmp = await createImageBitmap(blob);
+        bitmapsRef.current[i] = bmp;
+        
+        if (i === 0 && prevFrameRef.current === -1) {
+          drawBitmap(0);
+        }
       } catch (err) {
-        console.warn("Frame fail", i);
+        console.warn("Failed to load frame", i, err);
       } finally {
         loaded++;
         const pct = Math.round((loaded / TOTAL_FRAMES) * 100);
         if (loaderBarRef.current) loaderBarRef.current.style.width = `${pct}%`;
         if (loaderTextRef.current) loaderTextRef.current.textContent = `${pct}%`;
-        if (loaded >= (isMobile ? 1 : TOTAL_FRAMES)) { 
-          clearTimeout(failSafe); 
-          onComplete(); 
-        }
+        if (loaded >= TOTAL_FRAMES) { clearTimeout(failSafe); onComplete(); }
       }
     };
 
     const runBatches = async () => {
-      const BATCH = isMobile ? 1 : 10;
-      const PRELOAD_COUNT = isMobile ? 1 : 30;
-      for (let s = 0; s < PRELOAD_COUNT; s += BATCH) {
+      const BATCH = 10;
+      for (let s = 0; s < TOTAL_FRAMES; s += BATCH) {
         const batch: Promise<void>[] = [];
-        for (let i = s; i < Math.min(s + BATCH, PRELOAD_COUNT); i++) {
+        for (let i = s; i < Math.min(s + BATCH, TOTAL_FRAMES); i++) {
           batch.push(loadFrame(i));
         }
         await Promise.allSettled(batch);
       }
-      onComplete();
     };
     runBatches();
 
     // ─── GSAP tick: directly mirror Lenis → draw → UI ──────────────────────
     const tick = () => {
-      try {
-        const p = rawProgressRef.current;
-        const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
+      const wrap = wrapRef.current;
+      if (!wrap) return;
+      
+      // PERFORMANCE: Only run ticker if Hero is actually visible in the viewport
+      const rect = wrap.getBoundingClientRect();
+      const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+      if (!isVisible) return;
 
-        if (frameIdx !== prevFrameRef.current) {
-          if (bitmapsRef.current[frameIdx]) {
-            prevFrameRef.current = frameIdx;
-            drawBitmap(frameIdx);
-          } else {
-            loadFrame(frameIdx);
-          }
+      // Smooth lerp for buttery motion
+      const diff = targetPRef.current - smoothPRef.current;
+      if (Math.abs(diff) > 0.0001) {
+        smoothPRef.current += diff * 0.15;
+      } else {
+        smoothPRef.current = targetPRef.current;
+      }
 
-          // Strict Memory Management
-          const WINDOW = isMobile ? 2 : 15;
-          bitmapsRef.current.forEach((bmp, i) => {
-            if (bmp && (i < frameIdx - WINDOW || i > frameIdx + WINDOW)) {
-              bmp.close();
-              bitmapsRef.current[i] = undefined as any;
-            }
-          });
+      const p = smoothPRef.current;
+      const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
+
+      if (frameIdx !== prevFrameRef.current && bitmapsRef.current[frameIdx]) {
+        prevFrameRef.current = frameIdx;
+        drawBitmap(frameIdx);
+      }
+
+      if (fillRef.current) fillRef.current.style.transform = `scaleY(${p})`;
+      if (scrollHintRef.current)
+        scrollHintRef.current.style.opacity = String(Math.max(0, 1 - p / 0.06));
+
+      // Scene overlays
+      let activeScene = -1;
+      SCENES.forEach((scene, i) => {
+        const el = sceneRefs.current[i];
+        if (!el) return;
+        const [lo, hi] = scene.range;
+        const FADE = 0.08;
+        let opacity = 0, ty = 0;
+        if (p > lo - FADE && p < hi + FADE) {
+          const inT = eio((p - (lo - FADE)) / FADE);
+          const outT = eio(Math.max(0, p - hi) / FADE);
+          opacity = inT * (1 - outT);
+          ty = (1 - inT) * 18 - outT * 12;
         }
+        el.style.opacity = String(opacity);
+        el.style.transform = `translate3d(0,${ty}px,0)`;
+        if (opacity > 0.5) activeScene = i;
+      });
 
-        if (fillRef.current) fillRef.current.style.transform = `scaleY(${p})`;
-        if (scrollHintRef.current)
-          scrollHintRef.current.style.opacity = String(Math.max(0, 1 - p / 0.06));
-
-        // Scene overlays
-        let activeScene = -1;
-        SCENES.forEach((scene, i) => {
-          const el = sceneRefs.current[i];
-          if (!el) return;
-          const [lo, hi] = scene.range;
-          const FADE = 0.08;
-          let opacity = 0, ty = 0;
-          if (p > lo - FADE && p < hi + FADE) {
-            const inT = eio((p - (lo - FADE)) / FADE);
-            const outT = eio(Math.max(0, p - hi) / FADE);
-            opacity = inT * (1 - outT);
-            ty = (1 - inT) * 18 - outT * 12;
-          }
-          el.style.opacity = String(opacity);
-          el.style.transform = `translate3d(0,${ty}px,0)`;
-          if (opacity > 0.5) activeScene = i;
+      if (activeScene !== prevSceneRef.current) {
+        prevSceneRef.current = activeScene;
+        dotRefs.current.forEach((dot, di) => {
+          if (!dot) return;
+          dot.style.height = di === activeScene ? "28px" : "5px";
+          dot.style.backgroundColor =
+            di === activeScene ? GOLD : "rgba(255,255,255,0.12)";
         });
+        if (counterRef.current)
+          counterRef.current.textContent =
+            activeScene >= 0 ? `${activeScene + 1} / 3` : "— / 3";
+      }
 
-        if (activeScene !== prevSceneRef.current) {
-          prevSceneRef.current = activeScene;
-          dotRefs.current.forEach((dot, di) => {
-            if (!dot) return;
-            dot.style.height = di === activeScene ? "28px" : "5px";
-            dot.style.backgroundColor =
-              di === activeScene ? GOLD : "rgba(255,255,255,0.12)";
-          });
-          if (counterRef.current)
-            counterRef.current.textContent =
-              activeScene >= 0 ? `${activeScene + 1} / 3` : "— / 3";
-        }
-
-        if (ctaRef.current) {
-          const t = Math.max(0, (p - 0.88) / 0.1);
-          ctaRef.current.style.opacity = String(Math.min(1, t));
-          ctaRef.current.style.transform = `translate3d(-50%, ${(1 - Math.min(1, t)) * 16}px, 0)`;
-          ctaRef.current.style.pointerEvents = t > 0.5 ? "auto" : "none";
-        }
-      } catch (e) {
-        // Silently fail if frame is not ready
+      if (ctaRef.current) {
+        const t = Math.max(0, (p - 0.88) / 0.1);
+        ctaRef.current.style.opacity = String(Math.min(1, t));
+        ctaRef.current.style.transform = `translate3d(-50%, ${(1 - Math.min(1, t)) * 16}px, 0)`;
+        ctaRef.current.style.pointerEvents = t > 0.5 ? "auto" : "none";
       }
     };
 
