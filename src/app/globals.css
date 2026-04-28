@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+/* ─── Brand Color Tokens ─────────────────────────────────────────────────── */
+:root {
+  --background: #F9F6F2;
+  --foreground: #1a1c1a;
+
+  --brand-green-dark:  #1e2d24;
+  --brand-green:       #2e4a38;
+  --brand-green-mid:   #4d6453;
+  --brand-green-light: #6b8071;
+
+  --brand-gold:        #C9A84C;
+  --brand-gold-light:  #E8D08A;
+  --brand-gold-muted:  #8A6E2E;
+
+  --brand-ivory:       #F9F6F2;
+  --brand-ivory-dark:  #EDE8E0;
+
+  --brand-dark:        #0d110e;
+}
+
+/* ─── Tailwind Theme Mapping ─────────────────────────────────────────────── */
+@theme inline {
+  --color-background:     var(--background);
+  --color-foreground:     var(--foreground);
+
+  --color-primary:        var(--brand-green);
+  --color-primary-mid:    var(--brand-green-mid);
+  --color-primary-light:  var(--brand-green-light);
+  --color-primary-dark:   var(--brand-green-dark);
+
+  --color-secondary:      var(--brand-gold);
+  --color-secondary-light: var(--brand-gold-light);
+  --color-secondary-muted: var(--brand-gold-muted);
+
+  --color-ivory:          var(--brand-ivory);
+  --color-ivory-dark:     var(--brand-ivory-dark);
+  --color-dark:           var(--brand-dark);
+
+  --font-sans:  'Inter', system-ui, sans-serif;
+  --font-serif: 'Noto Serif', Georgia, serif;
+}
+
+/* ─── Base Styles ────────────────────────────────────────────────────────── */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+}
+
+/* ─── Glassmorphism Nav ──────────────────────────────────────────────────── */
+.glass-nav {
+  background: rgba(249, 246, 242, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(46, 74, 56, 0.08);
+}
+
+/* ─── Eyebrow Label ──────────────────────────────────────────────────────── */
+.eyebrow {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--brand-gold);
+}
+
+/* ─── Section Spacing ────────────────────────────────────────────────────── */
+.section {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding-top: 7rem;
+    padding-bottom: 7rem;
+  }
+}
+
+/* ─── Container ──────────────────────────────────────────────────────────── */
+.container-brand {
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .container-brand {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* ─── Gold Divider Line ──────────────────────────────────────────────────── */
+.gold-line {
+  width: 2.5rem;
+  height: 1px;
+  background: var(--brand-gold);
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ─── Form Base ──────────────────────────────────────────────────────────── */
+.field-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid rgba(46, 74, 56, 0.2);
+  padding: 0.75rem 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field-input:focus {
+  border-color: var(--brand-gold);
+}
+
+.field-label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--brand-green-light);
+  margin-bottom: 0.25rem;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--brand-gold); border-radius: 2px; }
+
+/* ─── Selection ──────────────────────────────────────────────────────────── */
+::selection {
+  background: var(--brand-gold);
+  color: var(--brand-dark);
+}
