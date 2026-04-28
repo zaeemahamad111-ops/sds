@@ -59,20 +59,7 @@ export default function HeroSequence() {
   // Lenis scroll position drives everything — no extra smoothing needed
   const rawProgressRef = useRef(0);
 
-  // ─── Sync with Lenis scroll ─────────────────────────────────────────────────
-  useLenis(() => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    
-    // Use getBoundingClientRect for more reliable position tracking in production
-    const rect = wrap.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const totalScrollable = wrap.offsetHeight - windowHeight;
-    
-    // Progress is based on how much of the wrapper has passed the top of the viewport
-    const progress = Math.min(1, Math.max(0, -rect.top / totalScrollable));
-    rawProgressRef.current = progress;
-  });
+  // Removed useLenis hook; calculation moved directly into GSAP ticker for 100% native reliability
 
   // ─── Canvas sizing ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -108,6 +95,7 @@ export default function HeroSequence() {
   useEffect(() => {
     let loaded = 0;
     let completed = false;
+    const isMobile = window.innerWidth < 768;
 
     const drawBitmap = (idx: number) => {
       const canvas = canvasRef.current;
@@ -137,21 +125,17 @@ export default function HeroSequence() {
 
     const failSafe = setTimeout(onComplete, 30000);
 
-    const isMobile = window.innerWidth <= 768;
-
     const loadFrame = async (i: number) => {
       try {
         const res = await fetch(FRAME_PATH(i + 1));
         const blob = await res.blob();
         
-        // Prevent mobile Safari from crashing/refreshing due to memory exhaustion
-        if (isMobile) {
-          const dpr = window.devicePixelRatio || 1;
-          const targetWidth = Math.min(window.innerWidth * dpr, 800);
-          bitmapsRef.current[i] = await createImageBitmap(blob, { resizeWidth: targetWidth });
-        } else {
-          bitmapsRef.current[i] = await createImageBitmap(blob);
-        }
+        // Mobile Memory Fix: Downscale high-res images to prevent iOS Safari memory crashes (infinite reloads)
+        const options: ImageBitmapOptions | undefined = isMobile 
+          ? { resizeWidth: Math.floor(window.innerWidth * 1.5), resizeQuality: "low" } 
+          : undefined;
+          
+        bitmapsRef.current[i] = await createImageBitmap(blob, options);
       } catch {
         // Slot stays undefined — skipped gracefully on draw
       } finally {
@@ -163,9 +147,9 @@ export default function HeroSequence() {
       }
     };
 
-    // Parallel batches: Use smaller batches on mobile to prevent memory spike crashes
+    // Parallel batches of 20 — much faster loading for 100+ frames
     const runBatches = async () => {
-      const BATCH = isMobile ? 3 : 10;
+      const BATCH = 20;
       for (let s = 0; s < TOTAL_FRAMES; s += BATCH) {
         const batch: Promise<void>[] = [];
         for (let i = s; i < Math.min(s + BATCH, TOTAL_FRAMES); i++) {
@@ -176,8 +160,16 @@ export default function HeroSequence() {
     };
     runBatches();
 
-    // ─── GSAP tick: directly mirror Lenis → draw → UI ──────────────────────
+    // ─── GSAP tick: directly mirror scroll → draw → UI ──────────────────────
     const tick = () => {
+      // 1. Calculate progress safely without relying on Lenis hooks (fixes mobile scroll detection failure)
+      const wrap = wrapRef.current;
+      if (wrap) {
+        const rect = wrap.getBoundingClientRect();
+        const totalScrollable = wrap.offsetHeight - window.innerHeight;
+        rawProgressRef.current = totalScrollable > 0 ? Math.min(1, Math.max(0, -rect.top / totalScrollable)) : 0;
+      }
+
       const p = rawProgressRef.current;
       const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
 
