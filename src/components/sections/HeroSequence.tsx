@@ -53,21 +53,25 @@ export default function HeroSequence() {
   const counterRef = useRef<HTMLSpanElement>(null);
 
   const bitmapsRef = useRef<ImageBitmap[]>([]);
-  const targetPRef = useRef(0);
-  const smoothPRef = useRef(0);
   const prevFrameRef = useRef(-1);
   const prevSceneRef = useRef(-1);
+
+  // Lenis scroll position drives everything — no extra smoothing needed
+  const rawProgressRef = useRef(0);
 
   // ─── Sync with Lenis scroll ─────────────────────────────────────────────────
   useLenis(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     
+    // Use getBoundingClientRect for more reliable position tracking in production
     const rect = wrap.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     const totalScrollable = wrap.offsetHeight - windowHeight;
     
-    targetPRef.current = Math.min(1, Math.max(0, -rect.top / totalScrollable));
+    // Progress is based on how much of the wrapper has passed the top of the viewport
+    const progress = Math.min(1, Math.max(0, -rect.top / totalScrollable));
+    rawProgressRef.current = progress;
   });
 
   // ─── Canvas sizing ──────────────────────────────────────────────────────────
@@ -76,34 +80,24 @@ export default function HeroSequence() {
     if (!canvas) return;
 
     const resize = () => {
-      const isMobile = window.innerWidth < 768;
-      const dpr = Math.min(isMobile ? 1.2 : 2, window.devicePixelRatio || 1);
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
       if (prevFrameRef.current >= 0) drawBitmap(prevFrameRef.current);
     };
 
-    const drawBitmap = (idx: number) => {
+    function drawBitmap(idx: number) {
       const bmp = bitmapsRef.current[idx];
       if (!canvas || !bmp) return;
       const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) return;
-      
-      const cw = canvas.width;
-      const ch = canvas.height;
-      const bw = bmp.width;
-      const bh = bmp.height;
-      
-      const scale = Math.max(cw / bw, ch / bh);
-      const sw = bw * scale;
-      const sh = bh * scale;
-      
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
+      const { width: cw, height: ch } = canvas;
+      const scale = Math.max(cw / bmp.width, ch / bmp.height);
+      const sw = bmp.width * scale;
+      const sh = bmp.height * scale;
       ctx.drawImage(bmp, (cw - sw) / 2, (ch - sh) / 2, sw, sh);
-    };
+    }
 
     resize();
     window.addEventListener("resize", resize);
@@ -125,6 +119,7 @@ export default function HeroSequence() {
       const scale = Math.max(cw / bmp.width, ch / bmp.height);
       const sw = bmp.width * scale;
       const sh = bmp.height * scale;
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(bmp, (cw - sw) / 2, (ch - sh) / 2, sw, sh);
     };
 
@@ -140,21 +135,25 @@ export default function HeroSequence() {
       drawBitmap(0);
     };
 
-    const failSafe = setTimeout(onComplete, 10000); // 10s failsafe for mobile
+    const failSafe = setTimeout(onComplete, 30000);
+
+    const isMobile = window.innerWidth <= 768;
 
     const loadFrame = async (i: number) => {
       try {
         const res = await fetch(FRAME_PATH(i + 1));
         const blob = await res.blob();
-        // createImageBitmap is off-main-thread and faster than standard <img> loading
-        const bmp = await createImageBitmap(blob);
-        bitmapsRef.current[i] = bmp;
         
-        if (i === 0 && prevFrameRef.current === -1) {
-          drawBitmap(0);
+        // Prevent mobile Safari from crashing/refreshing due to memory exhaustion
+        if (isMobile) {
+          const dpr = window.devicePixelRatio || 1;
+          const targetWidth = Math.min(window.innerWidth * dpr, 800);
+          bitmapsRef.current[i] = await createImageBitmap(blob, { resizeWidth: targetWidth });
+        } else {
+          bitmapsRef.current[i] = await createImageBitmap(blob);
         }
-      } catch (err) {
-        console.warn("Failed to load frame", i, err);
+      } catch {
+        // Slot stays undefined — skipped gracefully on draw
       } finally {
         loaded++;
         const pct = Math.round((loaded / TOTAL_FRAMES) * 100);
@@ -164,8 +163,9 @@ export default function HeroSequence() {
       }
     };
 
+    // Parallel batches: Use smaller batches on mobile to prevent memory spike crashes
     const runBatches = async () => {
-      const BATCH = 10;
+      const BATCH = isMobile ? 3 : 10;
       for (let s = 0; s < TOTAL_FRAMES; s += BATCH) {
         const batch: Promise<void>[] = [];
         for (let i = s; i < Math.min(s + BATCH, TOTAL_FRAMES); i++) {
@@ -178,23 +178,7 @@ export default function HeroSequence() {
 
     // ─── GSAP tick: directly mirror Lenis → draw → UI ──────────────────────
     const tick = () => {
-      const wrap = wrapRef.current;
-      if (!wrap) return;
-      
-      // PERFORMANCE: Only run ticker if Hero is actually visible in the viewport
-      const rect = wrap.getBoundingClientRect();
-      const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
-      if (!isVisible) return;
-
-      // Smooth lerp for buttery motion
-      const diff = targetPRef.current - smoothPRef.current;
-      if (Math.abs(diff) > 0.0001) {
-        smoothPRef.current += diff * 0.15;
-      } else {
-        smoothPRef.current = targetPRef.current;
-      }
-
-      const p = smoothPRef.current;
+      const p = rawProgressRef.current;
       const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
 
       if (frameIdx !== prevFrameRef.current && bitmapsRef.current[frameIdx]) {
