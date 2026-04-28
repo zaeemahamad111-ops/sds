@@ -135,15 +135,19 @@ export default function HeroSequence() {
       drawBitmap(0);
     };
 
-    const failSafe = setTimeout(onComplete, 30000);
+    const failSafe = setTimeout(onComplete, 10000); // 10s failsafe for mobile
 
     const loadFrame = async (i: number) => {
       try {
         const res = await fetch(FRAME_PATH(i + 1));
         const blob = await res.blob();
         bitmapsRef.current[i] = await createImageBitmap(blob);
-      } catch {
-        // Slot stays undefined — skipped gracefully on draw
+        // Draw first frame immediately once it's ready
+        if (i === 0 && prevFrameRef.current === -1) {
+          drawBitmap(0);
+        }
+      } catch (err) {
+        console.warn("Failed to load frame", i, err);
       } finally {
         loaded++;
         const pct = Math.round((loaded / TOTAL_FRAMES) * 100);
@@ -153,9 +157,9 @@ export default function HeroSequence() {
       }
     };
 
-    // Parallel batches of 20 — much faster loading for 100+ frames
+    // Parallel batches of 10 — balanced for mobile and desktop
     const runBatches = async () => {
-      const BATCH = 20;
+      const BATCH = 10;
       for (let s = 0; s < TOTAL_FRAMES; s += BATCH) {
         const batch: Promise<void>[] = [];
         for (let i = s; i < Math.min(s + BATCH, TOTAL_FRAMES); i++) {
