@@ -108,6 +108,7 @@ export default function HeroSequence() {
   useEffect(() => {
     let loaded = 0;
     let completed = false;
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
     const drawBitmap = (idx: number) => {
       const canvas = canvasRef.current;
@@ -135,33 +136,32 @@ export default function HeroSequence() {
       drawBitmap(0);
     };
 
-    const failSafe = setTimeout(onComplete, 10000); // 10s failsafe for mobile
+    const failSafe = setTimeout(onComplete, 8000); 
 
     const loadFrame = async (i: number) => {
+      if (i < 0 || i >= TOTAL_FRAMES || bitmapsRef.current[i]) return;
       try {
         const res = await fetch(FRAME_PATH(i + 1));
         const blob = await res.blob();
         bitmapsRef.current[i] = await createImageBitmap(blob);
-        // Draw first frame immediately once it's ready
-        if (i === 0 && prevFrameRef.current === -1) {
-          drawBitmap(0);
-        }
+        if (i === 0 && prevFrameRef.current === -1) drawBitmap(0);
       } catch (err) {
-        console.warn("Failed to load frame", i, err);
+        console.warn("Frame fail", i);
       } finally {
         loaded++;
         const pct = Math.round((loaded / TOTAL_FRAMES) * 100);
         if (loaderBarRef.current) loaderBarRef.current.style.width = `${pct}%`;
         if (loaderTextRef.current) loaderTextRef.current.textContent = `${pct}%`;
-        if (loaded >= TOTAL_FRAMES) { clearTimeout(failSafe); onComplete(); }
+        if (loaded >= (isMobile ? 1 : TOTAL_FRAMES)) { 
+          clearTimeout(failSafe); 
+          onComplete(); 
+        }
       }
     };
 
-    // Only pre-load the first 30 frames to save memory on mobile.
-    // The rest will load on-demand as the user scrolls.
     const runBatches = async () => {
-      const BATCH = 10;
-      const PRELOAD_COUNT = Math.min(TOTAL_FRAMES, 30);
+      const BATCH = isMobile ? 1 : 10;
+      const PRELOAD_COUNT = isMobile ? 1 : 30;
       for (let s = 0; s < PRELOAD_COUNT; s += BATCH) {
         const batch: Promise<void>[] = [];
         for (let i = s; i < Math.min(s + BATCH, PRELOAD_COUNT); i++) {
@@ -169,79 +169,78 @@ export default function HeroSequence() {
         }
         await Promise.allSettled(batch);
       }
-      // Mark as complete even if we only pre-loaded a portion
       onComplete();
     };
     runBatches();
 
     // ─── GSAP tick: directly mirror Lenis → draw → UI ──────────────────────
     const tick = () => {
-      const p = rawProgressRef.current;
-      const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
+      try {
+        const p = rawProgressRef.current;
+        const frameIdx = Math.min(TOTAL_FRAMES - 1, Math.round(p * (TOTAL_FRAMES - 1)));
 
-      if (frameIdx !== prevFrameRef.current) {
-        // If we have the bitmap, draw it
-        if (bitmapsRef.current[frameIdx]) {
-          prevFrameRef.current = frameIdx;
-          drawBitmap(frameIdx);
-        } else {
-          // If not loaded yet, try to load it on demand (for mobile/low memory)
-          loadFrame(frameIdx);
-        }
-
-        // ─── Memory Management: Sliding Window ──────────────────────────
-        // On mobile, keeping 100 bitmaps in RAM crashes the browser.
-        // We only keep the 15 frames around the current one.
-        const WINDOW = 15;
-        bitmapsRef.current.forEach((bmp, i) => {
-          if (bmp && (i < frameIdx - WINDOW || i > frameIdx + WINDOW)) {
-            bmp.close();
-            bitmapsRef.current[i] = undefined as any;
+        if (frameIdx !== prevFrameRef.current) {
+          if (bitmapsRef.current[frameIdx]) {
+            prevFrameRef.current = frameIdx;
+            drawBitmap(frameIdx);
+          } else {
+            loadFrame(frameIdx);
           }
-        });
-      }
 
-      if (fillRef.current) fillRef.current.style.transform = `scaleY(${p})`;
-      if (scrollHintRef.current)
-        scrollHintRef.current.style.opacity = String(Math.max(0, 1 - p / 0.06));
-
-      // Scene overlays
-      let activeScene = -1;
-      SCENES.forEach((scene, i) => {
-        const el = sceneRefs.current[i];
-        if (!el) return;
-        const [lo, hi] = scene.range;
-        const FADE = 0.08;
-        let opacity = 0, ty = 0;
-        if (p > lo - FADE && p < hi + FADE) {
-          const inT = eio((p - (lo - FADE)) / FADE);
-          const outT = eio(Math.max(0, p - hi) / FADE);
-          opacity = inT * (1 - outT);
-          ty = (1 - inT) * 18 - outT * 12;
+          // Strict Memory Management
+          const WINDOW = isMobile ? 2 : 15;
+          bitmapsRef.current.forEach((bmp, i) => {
+            if (bmp && (i < frameIdx - WINDOW || i > frameIdx + WINDOW)) {
+              bmp.close();
+              bitmapsRef.current[i] = undefined as any;
+            }
+          });
         }
-        el.style.opacity = String(opacity);
-        el.style.transform = `translate3d(0,${ty}px,0)`;
-        if (opacity > 0.5) activeScene = i;
-      });
 
-      if (activeScene !== prevSceneRef.current) {
-        prevSceneRef.current = activeScene;
-        dotRefs.current.forEach((dot, di) => {
-          if (!dot) return;
-          dot.style.height = di === activeScene ? "28px" : "5px";
-          dot.style.backgroundColor =
-            di === activeScene ? GOLD : "rgba(255,255,255,0.12)";
+        if (fillRef.current) fillRef.current.style.transform = `scaleY(${p})`;
+        if (scrollHintRef.current)
+          scrollHintRef.current.style.opacity = String(Math.max(0, 1 - p / 0.06));
+
+        // Scene overlays
+        let activeScene = -1;
+        SCENES.forEach((scene, i) => {
+          const el = sceneRefs.current[i];
+          if (!el) return;
+          const [lo, hi] = scene.range;
+          const FADE = 0.08;
+          let opacity = 0, ty = 0;
+          if (p > lo - FADE && p < hi + FADE) {
+            const inT = eio((p - (lo - FADE)) / FADE);
+            const outT = eio(Math.max(0, p - hi) / FADE);
+            opacity = inT * (1 - outT);
+            ty = (1 - inT) * 18 - outT * 12;
+          }
+          el.style.opacity = String(opacity);
+          el.style.transform = `translate3d(0,${ty}px,0)`;
+          if (opacity > 0.5) activeScene = i;
         });
-        if (counterRef.current)
-          counterRef.current.textContent =
-            activeScene >= 0 ? `${activeScene + 1} / 3` : "— / 3";
-      }
 
-      if (ctaRef.current) {
-        const t = Math.max(0, (p - 0.88) / 0.1);
-        ctaRef.current.style.opacity = String(Math.min(1, t));
-        ctaRef.current.style.transform = `translate3d(-50%, ${(1 - Math.min(1, t)) * 16}px, 0)`;
-        ctaRef.current.style.pointerEvents = t > 0.5 ? "auto" : "none";
+        if (activeScene !== prevSceneRef.current) {
+          prevSceneRef.current = activeScene;
+          dotRefs.current.forEach((dot, di) => {
+            if (!dot) return;
+            dot.style.height = di === activeScene ? "28px" : "5px";
+            dot.style.backgroundColor =
+              di === activeScene ? GOLD : "rgba(255,255,255,0.12)";
+          });
+          if (counterRef.current)
+            counterRef.current.textContent =
+              activeScene >= 0 ? `${activeScene + 1} / 3` : "— / 3";
+        }
+
+        if (ctaRef.current) {
+          const t = Math.max(0, (p - 0.88) / 0.1);
+          ctaRef.current.style.opacity = String(Math.min(1, t));
+          ctaRef.current.style.transform = `translate3d(-50%, ${(1 - Math.min(1, t)) * 16}px, 0)`;
+          ctaRef.current.style.pointerEvents = t > 0.5 ? "auto" : "none";
+        }
+      } catch (e) {
+        // Silently fail if frame is not ready
       }
     };
 
