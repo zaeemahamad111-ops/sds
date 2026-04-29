@@ -52,7 +52,7 @@ export default function HeroSequence() {
   const dotRefs = useRef<(HTMLDivElement | null)[]>([]);
   const counterRef = useRef<HTMLSpanElement>(null);
 
-  const bitmapsRef = useRef<ImageBitmap[]>([]);
+  const bitmapsRef = useRef<any[]>([]);
   const prevFrameRef = useRef(-1);
   const prevSceneRef = useRef(-1);
 
@@ -125,31 +125,29 @@ export default function HeroSequence() {
 
     const failSafe = setTimeout(onComplete, 30000);
 
-    const loadFrame = async (i: number) => {
-      try {
-        const res = await fetch(FRAME_PATH(i + 1));
-        const blob = await res.blob();
-        
-        // Mobile Memory Fix: Downscale high-res images to prevent iOS Safari memory crashes (infinite reloads)
-        const options: ImageBitmapOptions | undefined = isMobile 
-          ? { resizeWidth: Math.floor(window.innerWidth * 1.5), resizeQuality: "low" } 
-          : undefined;
-          
-        bitmapsRef.current[i] = await createImageBitmap(blob, options);
-      } catch {
-        // Slot stays undefined — skipped gracefully on draw
-      } finally {
-        loaded++;
-        const pct = Math.round((loaded / TOTAL_FRAMES) * 100);
-        if (loaderBarRef.current) loaderBarRef.current.style.width = `${pct}%`;
-        if (loaderTextRef.current) loaderTextRef.current.textContent = `${pct}%`;
-        if (loaded >= TOTAL_FRAMES) { clearTimeout(failSafe); onComplete(); }
-      }
+    const loadFrame = (i: number) => {
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        const finish = () => {
+          loaded++;
+          const pct = Math.round((loaded / TOTAL_FRAMES) * 100);
+          if (loaderBarRef.current) loaderBarRef.current.style.width = `${pct}%`;
+          if (loaderTextRef.current) loaderTextRef.current.textContent = `${pct}%`;
+          if (loaded >= TOTAL_FRAMES) { clearTimeout(failSafe); onComplete(); }
+          resolve();
+        };
+        img.onload = () => {
+          bitmapsRef.current[i] = img;
+          finish();
+        };
+        img.onerror = finish;
+        img.src = FRAME_PATH(i + 1);
+      });
     };
 
-    // Parallel batches of 20 — much faster loading for 100+ frames
+    // Parallel batches: slower on mobile to prevent network/memory spikes, fast on desktop
     const runBatches = async () => {
-      const BATCH = 20;
+      const BATCH = isMobile ? 5 : 20;
       for (let s = 0; s < TOTAL_FRAMES; s += BATCH) {
         const batch: Promise<void>[] = [];
         for (let i = s; i < Math.min(s + BATCH, TOTAL_FRAMES); i++) {
