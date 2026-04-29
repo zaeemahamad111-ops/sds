@@ -160,14 +160,25 @@ export default function HeroSequence() {
     };
     runBatches();
 
+    // Cache layout bounds to completely eliminate scroll lag (prevents layout thrashing on tick)
+    const bounds = { top: 0, scrollable: 0 };
+    const updateBounds = () => {
+      if (wrapRef.current) {
+        const rect = wrapRef.current.getBoundingClientRect();
+        bounds.top = rect.top + window.scrollY;
+        bounds.scrollable = wrapRef.current.offsetHeight - window.innerHeight;
+      }
+    };
+    updateBounds();
+    window.addEventListener("resize", updateBounds);
+    // Extra update after load to catch any layout shifts
+    setTimeout(updateBounds, 1000);
+
     // ─── GSAP tick: directly mirror scroll → draw → UI ──────────────────────
     const tick = () => {
-      // 1. Calculate progress safely without relying on Lenis hooks (fixes mobile scroll detection failure)
-      const wrap = wrapRef.current;
-      if (wrap) {
-        const rect = wrap.getBoundingClientRect();
-        const totalScrollable = wrap.offsetHeight - window.innerHeight;
-        rawProgressRef.current = totalScrollable > 0 ? Math.min(1, Math.max(0, -rect.top / totalScrollable)) : 0;
+      // 1. Calculate progress using cached bounds + non-blocking window.scrollY
+      if (bounds.scrollable > 0) {
+        rawProgressRef.current = Math.min(1, Math.max(0, (window.scrollY - bounds.top) / bounds.scrollable));
       }
 
       const p = rawProgressRef.current;
