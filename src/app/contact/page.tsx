@@ -62,8 +62,8 @@ export default function ContactPage() {
                 <div>
                   <h4 className="text-lg font-serif text-primary mb-1">Inquiry Channels</h4>
                   <p className="text-sm text-gray-500">
-                    B2B: export@sds-export.com<br />
-                    Logistics: supply@sds-export.com
+                    B2B: export@apex-export.com<br />
+                    Logistics: supply@apex-export.com
                   </p>
                 </div>
               </div>

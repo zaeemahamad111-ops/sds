@@ -32,9 +32,9 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <img src="/logo.jpeg" alt="SD&S Logo" className="h-10 w-auto object-contain rounded-sm" />
-          <span className="text-xl font-bold tracking-tight text-white hidden sm:block">
-            SD&S EXPORT
+          <img src="/logo.jpeg" alt="Apex Logo" className="h-10 w-auto object-contain rounded-sm" />
+          <span className="text-xl font-bold tracking-tight mt-[2px] text-white">
+            APEX EXPORT
           </span>
         </Link>
 

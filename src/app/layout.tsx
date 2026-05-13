@@ -14,7 +14,7 @@ const notoSerif = Noto_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "SD&S Export | Premium Indian Spice Export & Logistics",
+  title: "Apex Export | Premium Indian Spice Export & Logistics",
   description: "Connecting Indian soil to global markets with premium cardamom, pepper, and world-class logistics since 1994.",
   keywords: ["Indian spice exporters", "cardamom export India", "black pepper exporters", "bulk spice suppliers India", "export logistics"],
 };

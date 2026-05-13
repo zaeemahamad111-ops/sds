@@ -298,8 +298,8 @@ export default function HeroSequence() {
 
         <div ref={loaderRef} className="absolute inset-0 flex flex-col items-center justify-center z-50 transition-opacity duration-700 bg-primary-dark">
           <div className="animate-pulse flex flex-col items-center">
-            <img src="/logo.jpeg" alt="SD&S Export Logo" className="h-20 w-auto mb-6 object-contain rounded-sm" />
-            <p className="font-serif text-2xl tracking-[0.3em] text-white/90 uppercase mb-12">SD&amp;S Export</p>
+            <img src="/logo.jpeg" alt="Apex Export Logo" className="h-20 w-auto mb-6 object-contain rounded-sm" />
+            <p className="font-serif text-2xl tracking-[0.3em] text-white/90 uppercase mb-12">Apex Export</p>
           </div>
           <div className="w-64 h-[2px] relative overflow-hidden mb-6 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.1)" }}>
             <div ref={loaderBarRef} className="absolute top-0 left-0 h-full transition-all duration-150 rounded-full" style={{ width: "0%", backgroundColor: GOLD }} />

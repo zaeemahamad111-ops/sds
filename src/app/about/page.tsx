@@ -18,7 +18,7 @@ export default function AboutPage() {
               <span className="text-secondary italic">Rooted in Tradition</span>
             </h1>
             <p className="text-gray-600 mb-8 leading-relaxed">
-              Founded in 1994 in the heart of Kerala&apos;s spice belt, SD&S Export began with a simple vision: to bring the authentic flavors of India to the world without compromise. 
+              Founded in 1994 in the heart of Kerala&apos;s spice belt, Apex Export began with a simple vision: to bring the authentic flavors of India to the world without compromise. 
             </p>
             <p className="text-gray-600 mb-12 leading-relaxed">
               Over three decades, we have evolved from a local trading house into a global logistics powerhouse, while maintaining our core values of integrity, transparency, and deep respect for the farmers who are the backbone of our industry.

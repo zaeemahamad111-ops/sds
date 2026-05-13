@@ -111,7 +111,7 @@ export default function Home() {
         <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-6xl font-serif mb-6 md:mb-8 leading-tight">Ready to Expand <br />Your Reach?</h2>
           <p className="text-base md:text-lg text-white/70 mb-10 md:mb-12 max-w-2xl mx-auto">
-            Join a global network of B2B partners who rely on SD&S Export for consistent quality and logistical precision.
+            Join a global network of B2B partners who rely on Apex Export for consistent quality and logistical precision.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center">
              <button className="w-full sm:w-auto bg-secondary text-white px-8 md:px-10 py-4 md:py-5 font-bold uppercase tracking-[0.2em] text-xs md:text-sm hover:bg-secondary-light transition-colors">
